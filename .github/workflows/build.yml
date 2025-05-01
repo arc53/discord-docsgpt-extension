@@ -1,4 +1,4 @@
-name: Build and push DocsGPT Docker image
+name: Build and push discord-docsgpt-extension Docker image
 
 on:
   push:
@@ -53,11 +53,11 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/docsgpt:latest-${{ matrix.suffix }}
-            ghcr.io/${{ github.repository_owner }}/docsgpt:latest-${{ matrix.suffix }}
+            ${{ secrets.DOCKER_USERNAME }}/discord-docsgpt-extension:latest-${{ matrix.suffix }}
+            ghcr.io/${{ github.repository_owner }}/discord-docsgpt-extension:latest-${{ matrix.suffix }}
           provenance: false
           sbom: false
-          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/docsgpt:latest
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/discord-docsgpt-extension:latest
           cache-to: type=inline
 
   manifest:
@@ -88,15 +88,15 @@ jobs:
       - name: Create and push manifest for DockerHub
         run: |
           set -e
-          docker manifest create ${{ secrets.DOCKER_USERNAME }}/docsgpt:latest \
-            --amend ${{ secrets.DOCKER_USERNAME }}/docsgpt:latest-amd64 \
-            --amend ${{ secrets.DOCKER_USERNAME }}/docsgpt:latest-arm64
-          docker manifest push ${{ secrets.DOCKER_USERNAME }}/docsgpt:latest
+          docker manifest create ${{ secrets.DOCKER_USERNAME }}/discord-docsgpt-extension:latest \
+            --amend ${{ secrets.DOCKER_USERNAME }}/discord-docsgpt-extension:latest-amd64 \
+            --amend ${{ secrets.DOCKER_USERNAME }}/discord-docsgpt-extension:latest-arm64
+          docker manifest push ${{ secrets.DOCKER_USERNAME }}/discord-docsgpt-extension:latest
 
       - name: Create and push manifest for ghcr.io
         run: |
           set -e
-          docker manifest create ghcr.io/${{ github.repository_owner }}/docsgpt:latest \
-            --amend ghcr.io/${{ github.repository_owner }}/docsgpt:latest-amd64 \
-            --amend ghcr.io/${{ github.repository_owner }}/docsgpt:latest-arm64
-          docker manifest push ghcr.io/${{ github.repository_owner }}/docsgpt:latest
+          docker manifest create ghcr.io/${{ github.repository_owner }}/discord-docsgpt-extension:latest \
+            --amend ghcr.io/${{ github.repository_owner }}/discord-docsgpt-extension:latest-amd64 \
+            --amend ghcr.io/${{ github.repository_owner }}/discord-docsgpt-extension:latest-arm64
+          docker manifest push ghcr.io/${{ github.repository_owner }}/discord-docsgpt-extension:latest
