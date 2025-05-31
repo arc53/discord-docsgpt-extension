@@ -24,6 +24,7 @@ PREFIX = '!'  # Command prefix (can be adjusted or removed if only mention/DM ba
 BASE_API_URL = os.getenv("API_BASE", "https://gptcloud.arc53.com")
 API_URL = BASE_API_URL + "/api/answer"
 API_KEY = os.getenv("API_KEY")
+MAX_HISTORY_FOR_API_PAIRS = 10 # Use last 10 pairs (20 messages) for API context
 
 # --- Storage Configuration ---
 STORAGE_TYPE = os.getenv("STORAGE_TYPE", "memory").lower() # Default to in-memory
@@ -109,16 +110,15 @@ async def get_user_data(user_id: int) -> dict:
 async def save_user_data(user_id: int, history: list, conversation_id: str | None, user_info: dict | None):
     """
     Saves chat history, conversation ID, and user info to the configured storage
-    based on the Discord User ID. Limits history length.
+    based on the Discord User ID. History is appended indefinitely.
     """
     user_id_str = str(user_id)
-    max_history_len_pairs = 10 # Store last 10 pairs (user + assistant = 1 pair = 2 messages)
-    limited_history = history[-(max_history_len_pairs * 2):]
+    # The full 'history' list is saved. No limiting is done here.
 
     if STORAGE_TYPE == "mongodb" and mongo_collection is not None:
         try:
             update_data = {
-                "conversation_history": limited_history,
+                "conversation_history": history, # Save the full history
                 "conversation_id": conversation_id,
             }
             if user_info:
@@ -143,7 +143,7 @@ async def save_user_data(user_id: int, history: list, conversation_id: str | Non
              in_memory_storage[user_id_str] = {} # Initialize if new user
 
         in_memory_storage[user_id_str].update({ # Use update to merge data
-            "history": limited_history,
+            "history": history, # Save the full history
             "conversation_id": conversation_id,
             "last_updated": datetime.datetime.now(datetime.timezone.utc) # Timestamp
         })
@@ -159,9 +159,6 @@ intents.message_content = True
 intents.dm_messages = True # Ensure DM intents are enabled
 
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
-
-# Remove the old global dictionary
-# conversation_histories = {}
 
 # --- Helper Functions ---
 
@@ -187,10 +184,6 @@ def chunk_string(text, max_length=2000):
     if text: # Append the remaining part
         chunks.append(text)
     return chunks
-
-# The escape_markdown function might be less necessary if the API provides clean text
-# or if you want to allow some markdown from the API. Keep it if needed.
-# def escape_markdown(text): ...
 
 def format_history_for_api(messages: list) -> list:
     """
@@ -230,6 +223,7 @@ async def generate_answer(question: str, messages: list, conversation_id: str | 
         return {"answer": "Error: Backend API key is not configured.", "conversation_id": conversation_id}
 
     # Format history *before* sending to API
+    # 'messages' here is already the limited history (e.g., last 10 pairs)
     try:
         formatted_history = format_history_for_api(messages)
         # The API expects history as a JSON *string*
@@ -366,25 +360,29 @@ async def on_message(message: discord.Message):
     # --- Get History and Call API ---
     async with message.channel.typing(): # Show "Bot is typing..." indicator
         user_data = await get_user_data(user_id)
-        current_history = user_data["history"]
+        current_history = user_data["history"] # This is the full history from storage
         current_conversation_id = user_data["conversation_id"]
 
-        # Add user's message to internal history
+        # Add user's message to internal full history
         current_history.append({"role": "user", "content": question})
 
-        # Generate the answer
+        # For generating an answer, use only the last N pairs / 2N messages
+        # current_history can be shorter than MAX_HISTORY_FOR_API_PAIRS * 2, slicing handles this.
+        history_for_api = current_history[-(MAX_HISTORY_FOR_API_PAIRS * 2):]
+
+        # Generate the answer using the limited history_for_api
         response_doc = await generate_answer(
             question,
-            current_history, # Pass the history including the latest user message
+            history_for_api, # Pass the limited history for API context
             current_conversation_id
         )
         answer = response_doc["answer"]
         new_conversation_id = response_doc["conversation_id"] # Use the potentially updated ID
 
-        # Add bot's response to internal history
+        # Add bot's response to the internal full history
         current_history.append({"role": "assistant", "content": answer})
 
-        # Save updated data
+        # Save updated full data (current_history now contains the latest exchange)
         await save_user_data(user_id, current_history, new_conversation_id, user_info_dict)
 
     # --- Send Response ---
@@ -399,7 +397,6 @@ async def on_message(message: discord.Message):
         except discord.HTTPException as e:
             logger.error(f"Failed to send message chunk to {message.channel.id}: {e}", exc_info=True)
             # Potentially retry or break
-
 
 
 if not TOKEN:
