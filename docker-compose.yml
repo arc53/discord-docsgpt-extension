@@ -1,0 +1,14 @@
+services:
+  discord-bot:
+    image: arc53/discord-docsgpt-extension:latest
+    container_name: discord-docsgpt-extension
+    env_file:
+      - .env
+    volumes:
+      - botdata:/app/data
+      # Several bots: mount a config file.
+      # - ./docsgpt-discord.toml:/app/docsgpt-discord.toml:ro
+    restart: unless-stopped
+
+volumes:
+  botdata:

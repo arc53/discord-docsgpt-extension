@@ -1,0 +1,43 @@
+[package]
+name = "docsgpt-discord"
+version = "2.0.0"
+edition = "2024"
+rust-version = "1.89"
+description = "Discord bots for DocsGPT agents: streamed answers, threads, buttons, files, multi-bot"
+license = "MIT"
+repository = "https://github.com/arc53/discord-docsgpt-extension"
+
+[dependencies]
+docsgpt-bot = "0.2"
+twilight-gateway = { version = "0.17.1", default-features = false, features = ["rustls-webpki-roots", "twilight-http", "zstd"] }
+twilight-http = { version = "0.17.1", default-features = false, features = ["rustls-webpki-roots", "decompression"] }
+twilight-model = "0.17.1"
+twilight-util = { version = "0.17.0", features = ["builder"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+anyhow = "1.0.104"
+async-trait = "0.1.92"
+bytes = "1.12.1"
+clap = { version = "4.6.6", features = ["derive", "env"] }
+dotenvy = "0.15.7"
+regex = "1.13.1"
+reqwest = { version = "0.13", default-features = false, features = ["json", "stream", "rustls", "http2", "charset"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+tokio = { version = "1.53.1", features = ["full"] }
+tokio-util = { version = "0.7.19", features = ["rt"] }
+futures-util = "0.3.34"
+toml = "1.1.4"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+
+[dev-dependencies]
+docsgpt-bot = { version = "0.2", features = ["testing"] }
+docsgpt = { version = "0.2", features = ["mock"] }
+axum = { version = "0.8.9", features = ["multipart"] }
+tempfile = "3.27.0"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

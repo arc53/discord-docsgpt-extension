@@ -1,0 +1,42 @@
+# Copy to docsgpt-discord.toml (or point DOCSGPT_DISCORD_CONFIG at it).
+# ${VAR} and ${VAR:-default} are read from the environment, so secrets can stay in .env.
+
+api_base = "https://gptcloud.arc53.com"   # your DocsGPT server when self-hosting
+
+[storage]
+backend = "sqlite"                         # sqlite (default) | memory
+# path = "data/docsgpt-discord.db"
+
+# ---------------------------------------------------------------------------
+[[bots]]
+name = "support"
+token = "${DISCORD_SUPPORT_TOKEN}"
+threads = true          # in servers, answer a mention in a new thread on that message
+follow_threads = true   # answer every message in the bot's threads (needs the Message Content intent)
+streaming = true        # edit the answer in as it is written
+files = true            # attachments in, generated files out
+max_file_mb = 20
+commands = true         # register /ask, /agents, /agent, /new
+# allowed_guilds = [123456789012345678]
+
+  [[bots.agents]]
+  name = "support"
+  api_key = "${DOCSGPT_KEY_SUPPORT}"
+  description = "Product and billing questions"
+  default = true
+
+  [[bots.agents]]
+  name = "sales"
+  api_key = "${DOCSGPT_KEY_SALES}"
+  description = "Pricing and plans"
+
+# ---------------------------------------------------------------------------
+# A second bot without the privileged intent: follow-ups need a mention or /ask.
+[[bots]]
+name = "docs"
+token = "${DISCORD_DOCS_TOKEN}"
+follow_threads = false
+
+  [[bots.agents]]
+  name = "docs"
+  api_key = "${DOCSGPT_KEY_DOCS}"
