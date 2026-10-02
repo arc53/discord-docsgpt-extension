@@ -171,6 +171,7 @@ async fn api(State(m): State<Arc<MockDiscord>>, Path(path): Path<String>, req: R
     let (name, params): (&str, Vec<(&str, String)>) = match (method.clone(), seg.as_slice()) {
         (Method::GET, ["users", "@me"]) => ("current_user", vec![]),
         (Method::GET, ["applications", "@me"]) => ("current_app", vec![]),
+        (Method::GET, ["guilds", _, "roles"]) => ("guild_roles", vec![]),
         (Method::PUT, ["applications", _, "commands"]) => ("set_commands", vec![]),
         (Method::POST, ["channels", c, "messages"]) => ("create_message", vec![("channel", c.to_string())]),
         (Method::PATCH, ["channels", c, "messages", msg]) => (
@@ -223,6 +224,11 @@ async fn api(State(m): State<Arc<MockDiscord>>, Path(path): Path<String>, req: R
             json!({"id": APP_ID.to_string(), "name": "DocsGPT", "description": "", "bot_public": true, "bot_require_code_grant": false, "verify_key": "k", "icon": null})
         }
         "set_commands" => json!([]),
+        // The bot's managed role (id 777) and an ordinary one.
+        "guild_roles" => json!([
+            {"id": "777", "name": "DocsGPT", "color": 0, "colors": {"primary_color": 0}, "hoist": false, "managed": true, "mentionable": false, "permissions": "0", "position": 1, "flags": 0, "tags": {"bot_id": BOT_USER.to_string()}},
+            {"id": "555", "name": "team", "color": 0, "colors": {"primary_color": 0}, "hoist": false, "managed": false, "mentionable": true, "permissions": "0", "position": 2, "flags": 0}
+        ]),
         "create_message" => {
             let id = m.id();
             call.query.insert("message".into(), id.to_string());

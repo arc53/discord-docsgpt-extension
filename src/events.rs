@@ -63,11 +63,30 @@ async fn bot_thread_parent(bot: &DiscordBot, channel: Id<ChannelMarker>) -> Opti
 }
 
 async fn on_message(bot: &Arc<DiscordBot>, msg: Message) -> anyhow::Result<()> {
+    tracing::debug!(
+        guild = ?msg.guild_id.map(|g| g.get()),
+        channel = %msg.channel_id,
+        from_bot = msg.author.bot,
+        mentions = msg.mentions.len(),
+        role_mentions = msg.mention_roles.len(),
+        has_text = !msg.content.is_empty(),
+        "message received"
+    );
     if msg.author.bot || msg.author.id == bot.user_id {
         return Ok(());
     }
-    let mentioned = msg.mentions.iter().any(|m| m.id == bot.user_id);
-    let text = clean_incoming(&msg.content, bot.user_id.get());
+    let mut mentioned = msg.mentions.iter().any(|m| m.id == bot.user_id);
+    let mut content = msg.content.clone();
+    if let Some(guild) = msg.guild_id
+        && !msg.mention_roles.is_empty()
+        && let Some(role) = bot.managed_role(guild).await
+        && msg.mention_roles.contains(&role)
+    {
+        // `@DocsGPT` autocompleted to the bot's role: same thing.
+        mentioned = true;
+        content = content.replace(&format!("<@&{role}>"), "");
+    }
+    let text = clean_incoming(&content, bot.user_id.get());
     let name = &bot.cfg.name;
     let Some(guild) = msg.guild_id else {
         // A DM: every message, one conversation per DM until /new.
@@ -87,6 +106,7 @@ async fn on_message(bot: &Arc<DiscordBot>, msg: Message) -> anyhow::Result<()> {
         .await;
     };
     if !bot.cfg.guild_allowed(Some(guild.get())) {
+        tracing::debug!(%guild, "ignored: server not in allowed_guilds");
         return Ok(());
     }
     if let Some(parent) = bot_thread_parent(bot, msg.channel_id).await {
@@ -96,6 +116,7 @@ async fn on_message(bot: &Arc<DiscordBot>, msg: Message) -> anyhow::Result<()> {
                 && !mentions_someone_else(&msg.content, bot.user_id.get())
                 && !msg.content.trim_start().starts_with('!'));
         if !follow {
+            tracing::debug!(channel = %msg.channel_id, "ignored in thread: follow_threads is off, or the message is for someone else");
             return Ok(());
         }
         return answer(
@@ -113,6 +134,7 @@ async fn on_message(bot: &Arc<DiscordBot>, msg: Message) -> anyhow::Result<()> {
         .await;
     }
     if !mentioned {
+        tracing::debug!(channel = %msg.channel_id, "ignored: not mentioned and not in one of the bot's threads");
         return Ok(());
     }
     start_question(

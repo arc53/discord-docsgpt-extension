@@ -1,13 +1,14 @@
 //! One Discord bot: its REST client, identity, DocsGPT core and runtime state.
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
 use docsgpt_bot::{Agents, BotCore, CancelRegistry, Shutdown, Storage};
 use twilight_http::Client;
 use twilight_model::id::Id;
-use twilight_model::id::marker::{ApplicationMarker, UserMarker};
+use twilight_model::id::marker::{ApplicationMarker, GuildMarker, RoleMarker, UserMarker};
 
 use crate::config::{BotConfig, Config};
 
@@ -23,6 +24,9 @@ pub struct DiscordBot {
     /// Running answers by `"{channel}:{message}"`, for the Stop button.
     pub cancels: CancelRegistry,
     pub shutdown: Shutdown,
+    /// The bot's managed role per server (Discord's autocomplete often
+    /// mentions that role instead of the bot).
+    managed_roles: Mutex<HashMap<Id<GuildMarker>, Option<Id<RoleMarker>>>>,
 }
 
 /// Storage record kind for threads the bot opened (id → parent channel).
@@ -68,7 +72,32 @@ impl DiscordBot {
             application_id: app.id,
             cancels: CancelRegistry::default(),
             shutdown,
+            managed_roles: Mutex::new(HashMap::new()),
         }))
+    }
+
+    /// The bot's own managed role in `guild`, looked up once.
+    pub async fn managed_role(&self, guild: Id<GuildMarker>) -> Option<Id<RoleMarker>> {
+        if let Some(cached) = self.managed_roles.lock().unwrap().get(&guild) {
+            return *cached;
+        }
+        let roles = match self.http.roles(guild).await {
+            Ok(resp) => resp.model().await.map_err(|e| e.to_string()),
+            Err(e) => Err(e.to_string()),
+        };
+        let role = match roles {
+            Ok(roles) => roles
+                .into_iter()
+                .find(|r| r.tags.as_ref().and_then(|t| t.bot_id) == Some(self.user_id))
+                .map(|r| r.id),
+            Err(e) => {
+                // Not cached: try again on the next role mention.
+                tracing::warn!(error = %e, %guild, "could not list the server's roles");
+                return None;
+            }
+        };
+        self.managed_roles.lock().unwrap().insert(guild, role);
+        role
     }
 
     /// OAuth2 URL that adds the bot to a server with the permissions it needs.

@@ -360,3 +360,19 @@ async fn when_an_answer_outgrows_a_message_the_earlier_one_loses_stop() {
     );
     assert_eq!(t.discord.buttons(&ids[1]), ["dg:fb:up", "dg:fb:down"]);
 }
+
+#[tokio::test]
+async fn mentioning_the_bots_role_counts_as_mentioning_the_bot() {
+    // Discord's autocomplete often picks the bot's managed role, not the bot user.
+    let t = start(|_| {}).await;
+    let mut q = in_channel(CHANNEL, "<@&777> how do I deploy?", false);
+    q["mention_roles"] = json!(["777"]);
+    t.send("MESSAGE_CREATE", q).await;
+    assert_eq!(t.docs.rec.count("/stream"), 1, "answered");
+    assert_eq!(t.docs.rec.last("/stream").unwrap().body["question"], "how do I deploy?");
+    // Another role is not the bot.
+    let mut other = in_channel(CHANNEL, "<@&555> hello team", false);
+    other["mention_roles"] = json!(["555"]);
+    t.send("MESSAGE_CREATE", other).await;
+    assert_eq!(t.docs.rec.count("/stream"), 1);
+}
