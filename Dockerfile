@@ -1,17 +1,25 @@
-# Use an official Python runtime as a parent image
-FROM python:3.12-slim
-
-# Set the working directory in the container
+# ---- build stage -----------------------------------------------------------
+FROM rust:1.95-bookworm AS builder
 WORKDIR /app
 
-# Copy the requirements file into the container at /app
-COPY requirements.txt .
+# Build dependencies first so they are cached between source changes.
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir -p src && echo 'fn main() {}' > src/main.rs && echo '' > src/lib.rs \
+    && cargo build --release --locked \
+    && rm -rf src target/release/deps/docsgpt_discord* target/release/deps/libdocsgpt_discord* \
+              target/release/docsgpt-discord* target/release/.fingerprint/docsgpt-discord-*
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+COPY src ./src
+RUN touch src/lib.rs src/main.rs && cargo build --release --locked && mkdir -p /app/data
 
-# Copy the current directory contents into the container at /app
-COPY bot.py .
+# ---- runtime stage ---------------------------------------------------------
+FROM gcr.io/distroless/cc-debian12:nonroot
+WORKDIR /app
+COPY --from=builder /app/target/release/docsgpt-discord /usr/local/bin/docsgpt-discord
+COPY --from=builder --chown=nonroot:nonroot /app/data /app/data
+ENV SQLITE_PATH=/app/data/docsgpt-discord.db \
+    RUST_LOG=info
+VOLUME ["/app/data"]
 
-# Run bot.py when the container launches
-CMD ["python", "bot.py"]
+USER nonroot
+ENTRYPOINT ["/usr/local/bin/docsgpt-discord"]
